@@ -1,0 +1,34 @@
+pipeline {
+  agent any
+  tools {
+    maven 'maven3.6.3'
+    jdk 'JAVA8'
+  }
+  stages {
+    stage ('Build') {
+      steps {
+        echo 'Notify GitLab of build started'
+        updateGitlabCommitStatus name: 'build', state: 'pending'
+        sh 'mvn clean package'
+        updateGitlabCommitStatus name: 'build', state: 'success'
+      }
+    }
+    stage ('Deploy') {
+      steps {
+        script {
+         try {
+          echo 'Notify GitLab of deploy started'
+          updateGitlabCommitStatus name: 'deploy', state: 'pending'
+          deploy adapters: [tomcat8(credentialsId: '2340dc63-aef3-4e92-9f71-91984d2bad51', path: '/managers/text', url: 'http://10.50.50.165:8080')], contextPath: '/spdclsmartmeters', onFailure: false, war: '**/*.war' 
+          updateGitlabCommitStatus name: 'deploy', state: 'success'
+        } catch (Exception e) {
+           echo "Error during deployment: ${e.message}"
+           currentBuild.result = 'FAILURE'
+           updateGitlabCommitStatus name: 'deploy', state: 'failed', description: "Deployment failed: ${e.message}"
+           error("Deployment failed")
+           }
+        }
+      }
+    }
+  }
+}
